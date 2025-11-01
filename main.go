@@ -1,39 +1,14 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
+
+	"github.com/ahmadammarm/golang-todo-list/db"
+	"github.com/ahmadammarm/golang-todo-list/model"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"os"
 )
-
-func DatabaseInit() (*sql.DB, error) {
-	_ = godotenv.Load()
-
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASSWORD")
-	host := os.Getenv("DB_HOST")
-	port := os.Getenv("DB_PORT")
-	name := os.Getenv("DB_NAME")
-	sslmode := os.Getenv("DB_SSLMODE")
-
-	dsn := fmt.Sprintf("user=%s password=%s host=%s port=%s dbname=%s sslmode=%s",
-		user, password, host, port, name, sslmode)
-
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	return db, nil
-}
 
 func main() {
 	err := godotenv.Load()
@@ -41,12 +16,34 @@ func main() {
 		fmt.Println("Warning: .env file not found")
 	}
 
-	db, err := DatabaseInit()
+	db, err := db.DatabaseInit()
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
 
 	app := fiber.New()
+
+	// Get all activities route
+	app.Get("/activities", func(c *fiber.Ctx) error {
+		activities := []model.Activity{}
+
+		rows, err := db.Query("SELECT * FROM activities")
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var activity model.Activity
+			if err := rows.Scan(&activity.ID, &activity.Title, &activity.Category, &activity.Description, &activity.ActivityDate, &activity.Status, &activity.CreatedAt); err != nil {
+				return err
+			}
+			activities = append(activities, activity)
+		}
+
+		return c.Status(fiber.StatusOK).JSON(activities)
+	})
+
 	app.Listen(":8000")
 }
